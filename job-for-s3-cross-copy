@@ -1,0 +1,197 @@
+# 1}
+
+import boto3
+import json
+
+# Source bucket and prefix
+source_bucket = "source-bucket"
+source_prefix = "prefix"
+
+# Destination bucket and prefix
+destination_bucket = "destination-bucket"
+destination_prefix = "prefix"
+
+# Source region and destination region
+source_region = "us-west-2"
+destination_region = "us-east-1"
+
+# AWS accounts
+source_account = "123456789012"
+destination_account = "987654321098"
+
+# AWS Glue job name
+job_name = "s3-cross-region-copy"
+
+# Create the Glue client
+glue_client = boto3.client('glue')
+
+# Create the job
+glue_client.create_job(
+    Name=job_name,
+    Role='AWSGlueServiceRoleDefault',
+    Command={
+        'Name': 'glueetl',
+        'ScriptLocation': 's3://aws-glue-scripts-{0}-{1}/samples/cross_region_copy.py'.format(destination_region, destination_account)
+    },
+    DefaultArguments={
+        '--job-bookmark-option': 'job-bookmark-disable',
+        '--enable-continuous-cloudwatch-log': 'true',
+        '--s3_source_bucket': source_bucket,
+        '--s3_source_prefix': source_prefix,
+        '--s3_destination_bucket': destination_bucket,
+        '--s3_destination_prefix': destination_prefix,
+        '--s3_source_region': source_region,
+        '--s3_destination_region': destination_region
+    },
+    Connections={
+        'Connections': [
+            's3'
+        ]
+    },
+    MaxCapacity=2,
+    Timeout=60
+)
+
+# Start the job
+glue_client.start_job_run(
+    JobName=job_name
+)
+
+
+
+
+
+
+
+
+
+# 2}
+
+import boto3
+import json
+
+# Set up your source and destination S3 bucket information
+source_bucket_name = 'source_bucket_name'
+source_region_name = 'us-west-2'
+destination_bucket_name = 'destination_bucket_name'
+destination_region_name = 'us-east-1'
+
+# Set up your AWS credentials for the source and destination accounts
+source_credentials = boto3.Session(profile_name='source_profile').get_credentials()
+destination_credentials = boto3.Session(profile_name='destination_profile').get_credentials()
+
+# Create a Glue job to copy the contents of the source bucket to the destination bucket
+glue = boto3.client('glue', region_name=source_region_name, aws_access_key_id=source_credentials.access_key, aws_secret_access_key=source_credentials.secret_key)
+job_name = 'copy_s3_bucket'
+job_command = {
+    'Name': 'glueetl',
+    'ScriptLocation': 's3://aws-glue-scripts-{}/glue-etl-scripts/copy_s3_bucket.py'.format(source_region_name)
+}
+job_role = 'AWSGlueServiceRoleDefault'
+source_path = 's3://{}/'.format(source_bucket_name)
+destination_path = 's3://{}/'.format(destination_bucket_name)
+default_arguments = {
+    '--s3_source_path': source_path,
+    '--s3_destination_path': destination_path,
+    '--s3_source_region': source_region_name,
+    '--s3_destination_region': destination_region_name,
+    '--s3_source_profile': 'source_profile',
+    '--s3_destination_profile': 'destination_profile'
+}
+response = glue.create_job(Name=job_name, Role=job_role, Command=job_command, DefaultArguments=default_arguments)
+print(json.dumps(response, indent=2))
+
+# Start the Glue job to copy the contents of the source bucket to the destination bucket
+job_run_id = glue.start_job_run(JobName=job_name)['JobRunId']
+print(job_run_id)
+
+# Wait for the Glue job to complete
+job_run_status = glue.get_job_run(JobName=job_name, RunId=job_run_id)['JobRun']['JobRunState']
+while job_run_status not in ['SUCCEEDED', 'FAILED', 'STOPPED']:
+    job_run_status = glue.get_job_run(JobName=job_name, RunId=job_run_id)['JobRun']['JobRunState']
+
+# Print the status of the Glue job
+print(job_run_status)
+
+
+
+
+
+
+
+
+
+#3}
+
+
+
+import boto3
+
+# Define the source and destination S3 bucket names and regions
+source_bucket = 'my-source-bucket'
+source_region = 'us-west-2'
+destination_bucket = 'my-destination-bucket'
+destination_region = 'us-east-1'
+
+# Define the IAM roles for the source and destination accounts
+source_role_arn = 'arn:aws:iam::123456789012:role/my-source-role'
+destination_role_arn = 'arn:aws:iam::123456789012:role/my-destination-role'
+
+# Create a Glue job that copies data from the source bucket to the destination bucket
+glue = boto3.client('glue', region_name=source_region)
+job_name = 's3-copy-job'
+job_role = source_role_arn
+job_command = {
+    'Name': 'glueetl',
+    'ScriptLocation': 's3://my-glue-scripts/copy-s3-bucket.py'
+}
+job_execution_property = {
+    'MaxConcurrentRuns': 1
+}
+default_arguments = {
+    '--source_bucket': source_bucket,
+    '--source_region': source_region,
+    '--destination_bucket': destination_bucket,
+    '--destination_region': destination_region,
+    '--source_role_arn': source_role_arn,
+    '--destination_role_arn': destination_role_arn
+}
+response = glue.create_job(Name=job_name, Role=job_role, Command=job_command, ExecutionProperty=job_execution_property, DefaultArguments=default_arguments)
+
+# Define the Glue job script that copies data from the source bucket to the destination bucket
+glue_script = """
+from awsglue.utils import getResolvedOptions
+from awsglue.context import GlueContext
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+args = getResolvedOptions(sys.argv, ['source_bucket', 'source_region', 'destination_bucket', 'destination_region', 'source_role_arn', 'destination_role_arn'])
+
+# Define the source and destination S3 bucket information
+source_bucket = args['source_bucket']
+source_region = args['source_region']
+destination_bucket = args['destination_bucket']
+destination_region = args['destination_region']
+
+# Define the IAM roles for the source and destination accounts
+source_role_arn = args['source_role_arn']
+destination_role_arn = args['destination_role_arn']
+
+# Set up the Glue context and S3 file system for the source bucket
+glueContext = GlueContext(SparkContext.getOrCreate())
+spark = glueContext.spark_session
+s3 = glueContext._jvm.com.amazonaws.services.s3.AmazonS3ClientBuilder.standard
+
+
+
+
+
+
+
+
+
+
+#4} 
+
+
+
